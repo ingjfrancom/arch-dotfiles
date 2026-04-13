@@ -4,7 +4,7 @@ set -euo pipefail
 
 readonly MENU_TITLE="Power Menu"
 readonly NOTIFY_TITLE="Waybar power menu"
-readonly UPDATE_SCRIPT="/home/jfranco/.config/waybar/scripts/system-update.sh"
+readonly UPDATE_SCRIPT="/home/jfranco/.config/waybar/scripts/update-system-with-backup.sh"
 
 notify_user() {
   local message=$1

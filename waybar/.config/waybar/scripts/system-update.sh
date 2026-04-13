@@ -37,13 +37,13 @@ print_list() {
 }
 
 detect_aur_helper() {
-  if command -v paru >/dev/null 2>&1; then
-    printf 'paru\n'
+  if command -v yay >/dev/null 2>&1; then
+    printf 'yay\n'
     return
   fi
 
-  if command -v yay >/dev/null 2>&1; then
-    printf 'yay\n'
+  if command -v paru >/dev/null 2>&1; then
+    printf 'paru\n'
   fi
 }
 
