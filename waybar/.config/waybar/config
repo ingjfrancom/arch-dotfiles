@@ -1,0 +1,63 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 30,
+  "margin-top": 6,
+  "margin-left": 10,
+  "margin-right": 10,
+
+  "modules-left": ["hyprland/workspaces"],
+  "modules-center": ["clock"],
+  "modules-right": ["pulseaudio", "network", "battery", "tray", "custom/power"],
+
+  "clock": {
+    "format": "{:%H:%M}",
+    "tooltip-format": "{:%A, %d %B %Y}"
+  },
+
+  "battery": {
+    "format": "{capacity}% {icon}",
+    "format-charging": "⚡ {capacity}% {icon}",
+    "format-plugged": " {capacity}%",
+    "format-full": " {capacity}%",
+    "format-icons": ["", "", "", "", ""],
+    "tooltip-format": "Bateria: {capacity}%",
+    "states": {
+      "warning": 30,
+      "critical": 15
+    }
+  },
+
+  "network": {
+    "format-wifi": "  {essid}",
+    "format-ethernet": "󰈀 {ifname}",
+    "format-disconnected": "󰖪",
+    "tooltip-format-wifi": "SSID: {essid}\nIP: {ipaddr}\nSenal: {signalStrength}%",
+    "tooltip-format-ethernet": "Interfaz: {ifname}\nIP: {ipaddr}",
+    "tooltip-format-disconnected": "Sin conexion de red"
+  },
+
+  "pulseaudio": {
+    "format": "{volume}% {icon}",
+    "format-muted": " mute",
+    "format-icons": {
+      "default": ["", "", ""]
+    },
+    "tooltip-format": "{desc}",
+    "tooltip-format-muted": "Audio silenciado",
+    "scroll-step": 5,
+    "on-scroll-up": "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+",
+    "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
+  },
+
+  "tray": {
+    "spacing": 8
+  },
+
+  "custom/power": {
+   "format": "⏻",
+   "tooltip": false,
+   "on-click": "/home/jfranco/.config/waybar/scripts/power-menu.sh"
+  }
+
+}

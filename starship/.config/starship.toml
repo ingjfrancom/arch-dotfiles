@@ -1,0 +1,39 @@
+add_newline = false
+
+format = "$directory$git_branch$character"
+
+[directory]
+style = "bold #7aa2f7"
+
+[git_branch]
+style = "#bb9af7"
+
+[character]
+success_symbol = "[❯](#9ece6a)"
+error_symbol = "[❯](#f7768e)"
+
+
+
+
+
+
+
+#add_newline = false
+
+#[character]
+#success_symbol = "[➜](bold green)"
+#error_symbol = "[➜](bold red)"
+
+[username]
+show_always = true
+style_user = "bold blue"
+
+#[directory]
+#style = "bold cyan"
+
+#[git_branch]
+#style = "bold purple"
+
+[cmd_duration]
+min_time = 500
+format = "took [$duration](yellow)"

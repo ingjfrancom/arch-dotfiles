@@ -1,0 +1,64 @@
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+known_hosts
+authorized_keys
+*.kdbx
+secrets/
+tokens/
+credentials/
+
+# Shell and app histories
+.*history
+.zsh_history
+.bash_history
+.lesshst
+.python_history
+.node_repl_history
+
+# Caches, logs, temp files
+*.log
+*.cache
+cache/
+Cache/
+Caches/
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# Large personal media: keep the folder, not private images
+wallpapers/*
+!wallpapers/.gitkeep
+!wallpapers/README.md
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.mp4
+*.mov
+*.zip
+*.tar
+*.tar.gz
+
+# Browser/app state that should not be committed if copied accidentally
+.config/*/Cookies*
+.config/*/Login Data*
+.config/*/Local State
+.config/*/Network Persistent State
+.config/*/Session Storage/
+.config/*/Local Storage/
+.config/*/IndexedDB/
+.config/*/Crash Reports/
+
+# Local backups made by restore scripts
+.dotfiles-backup-*/

@@ -1,0 +1,44 @@
+[window]
+opacity = 0.88
+blur = true
+decorations = "full"
+padding = { x = 14, y = 14 }
+
+[font]
+normal = { family = "JetBrainsMono Nerd Font" }
+size = 11
+
+[cursor]
+style = { shape = "Beam", blinking = "Always" }
+
+[colors.primary]
+background = "#1e293b"
+foreground = "#e6edf7"
+
+[colors.cursor]
+text = "#1e293b"
+cursor = "#88c0d0"
+
+[colors.selection]
+text = "CellForeground"
+background = "#334155"
+
+[colors.normal]
+black = "#1c1f24"
+red = "#e06c75"
+green = "#98c379"
+yellow = "#e5c07b"
+blue = "#61afef"
+magenta = "#c678dd"
+cyan = "#56b6c2"
+white = "#dcdfe4"
+
+[colors.bright]
+black = "#5c6370"
+red = "#f28b94"
+green = "#b5d99c"
+yellow = "#f0d399"
+blue = "#8fc7ff"
+magenta = "#d7a9f3"
+cyan = "#7fd4de"
+white = "#f5f7fa"

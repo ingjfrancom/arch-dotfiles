@@ -1,0 +1,10 @@
+width=520
+height=360
+location=center
+show=drun
+prompt=Apps
+filter_rate=100
+allow_markup=true
+no_actions=true
+hide_scroll=true
+gtk_dark=true

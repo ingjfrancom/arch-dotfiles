@@ -1,0 +1,21 @@
+[DetailsMode]
+PreviewSize=64
+
+[ExtractDialog]
+1745x982 screen: Height=540
+1745x982 screen: Width=1163
+DirHistory[$e]=$HOME/Documentos/
+
+[General]
+Version=202
+ViewPropsTimestamp=2025,5,14,21,44,30.657
+
+[KFileDialog Settings]
+Places Icons Auto-resize=false
+Places Icons Static Size=22
+
+[MainWindow]
+MenuBar=Disabled
+
+[UiSettings]
+ColorScheme=BreezeDark
