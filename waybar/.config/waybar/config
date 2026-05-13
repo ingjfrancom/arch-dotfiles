@@ -8,7 +8,7 @@
 
   "modules-left": ["hyprland/workspaces"],
   "modules-center": ["clock"],
-  "modules-right": ["pulseaudio", "network", "battery", "tray", "custom/power"],
+  "modules-right": ["pulseaudio", "network", "battery", "custom/file-share", "tray", "custom/power"],
 
   "clock": {
     "format": "{:%H:%M}",
@@ -52,6 +52,17 @@
 
   "tray": {
     "spacing": 8
+  },
+
+  "custom/file-share": {
+    "exec": "/home/jfranco/.config/waybar/scripts/share-folder.sh status",
+    "return-type": "json",
+    "interval": 5,
+    "signal": 9,
+    "format": "{}",
+    "tooltip": true,
+    "on-click": "/home/jfranco/.config/waybar/scripts/share-folder.sh toggle",
+    "on-click-right": "/home/jfranco/.config/waybar/scripts/share-folder.sh stop"
   },
 
   "custom/power": {

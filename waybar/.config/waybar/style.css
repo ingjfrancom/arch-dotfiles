@@ -57,6 +57,7 @@ window#waybar {
 #network,
 #pulseaudio,
 #tray,
+#custom-file-share,
 #custom-power {
   padding: 1px 8px;
   margin: 0 2px;
@@ -72,6 +73,7 @@ window#waybar {
 #battery:hover,
 #network:hover,
 #pulseaudio:hover,
+#custom-file-share:hover,
 #custom-power:hover {
   background: rgba(255, 255, 255, 0.14);
 }
@@ -81,6 +83,22 @@ window#waybar {
 #pulseaudio.muted {
   background: rgba(255, 255, 255, 0.11);
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ===== CARPETA COMPARTIDA ===== */
+#custom-file-share.active {
+  color: #7ee787;
+  background: rgba(126, 231, 135, 0.13);
+  border-color: rgba(126, 231, 135, 0.24);
+}
+
+#custom-file-share.active:hover {
+  background: rgba(126, 231, 135, 0.2);
+  border-color: rgba(126, 231, 135, 0.34);
+}
+
+#custom-file-share.inactive {
+  color: #c9d1d9;
 }
 
 /* ===== POWER DESTACADO ===== */
