@@ -1,9 +1,4 @@
 # ==============================
-# 🚀 STARSHIP (PROMPT)
-# ==============================
-eval "$(starship init zsh)"
-
-# ==============================
 # ⚡ HISTORIAL INTELIGENTE
 # ==============================
 HISTSIZE=10000
@@ -70,3 +65,4 @@ eval "$(starship init zsh)"
 export ZSH_CURSOR_STYLE=beam
 #setopt smoothscroll
 export PATH="$HOME/.npm-global/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"

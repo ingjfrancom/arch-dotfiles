@@ -6,7 +6,6 @@ fvs2
 libfprint-2-tod1-goodix
 libfprint-tod
 paru
-paru-debug
 patool
 phonon-qt6-mpv
 python-fvs
@@ -16,6 +15,3 @@ visual-studio-code-bin
 vkbasalt-cli
 webkit2gtk
 woeusb-ng
-xf86-video-vmware
-yay
-yay-debug

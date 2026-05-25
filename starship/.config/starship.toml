@@ -1,6 +1,6 @@
 add_newline = false
 
-format = "$directory$git_branch$character"
+format = "$username$directory$git_branch$character"
 
 [directory]
 style = "bold #7aa2f7"
