@@ -66,3 +66,7 @@ export ZSH_CURSOR_STYLE=beam
 #setopt smoothscroll
 export PATH="$HOME/.npm-global/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
+
+
+# Added by Antigravity CLI installer
+export PATH="/home/jfranco/.local/bin:$PATH"
