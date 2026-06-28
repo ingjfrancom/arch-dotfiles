@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+log() {
+    local log_file
+
+    log_file="${XDG_RUNTIME_DIR:-}/hypr-lid-displays.log"
+    if [[ -z "${XDG_RUNTIME_DIR:-}" || ! -w "${XDG_RUNTIME_DIR:-}" ]]; then
+        log_file="${HOME}/.cache/hypr-lid-displays.log"
+    fi
+
+    printf '%s %s\n' "$(date '+%F %T')" "$*" >>"$log_file" 2>/dev/null || true
+}
+
+monitor_json() {
+    hyprctl monitors all -j 2>/dev/null
+}
+
+apply_layout() {
+    local monitors
+
+    monitors="$(monitor_json)" || {
+        log "hyprctl monitors failed"
+        return 1
+    }
+
+    python3 - "$monitors" <<'PY'
+import json
+import re
+import subprocess
+import sys
+
+try:
+    monitors = json.loads(sys.argv[1])
+except json.JSONDecodeError as exc:
+    print(f"invalid monitor json: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+internal_re = re.compile(r"^(eDP|LVDS|DSI)-")
+internal = [m["name"] for m in monitors if internal_re.match(m.get("name", ""))]
+external = [
+    m["name"]
+    for m in monitors
+    if m.get("name") and not internal_re.match(m["name"])
+]
+
+def lid_closed():
+    from pathlib import Path
+
+    for state_file in Path("/proc/acpi/button/lid").glob("*/state"):
+        try:
+            if "closed" in state_file.read_text().lower():
+                return True
+        except OSError:
+            pass
+    return False
+
+def hyprctl(*args):
+    subprocess.run(["hyprctl", *args], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+closed = lid_closed()
+
+if closed and external:
+    for index, name in enumerate(external):
+        position = "0x0" if index == 0 else "auto"
+        hyprctl("keyword", "monitor", f"{name},preferred,{position},auto")
+
+    for name in internal:
+        hyprctl("keyword", "monitor", f"{name},disable")
+
+    hyprctl("dispatch", "focusmonitor", external[0])
+else:
+    for name in internal:
+        hyprctl("keyword", "monitor", f"{name},preferred,auto,1")
+
+    for name in external:
+        hyprctl("keyword", "monitor", f"{name},preferred,auto,auto")
+
+PY
+}
+
+watch_events() {
+    local lock_file
+    local socket
+
+    lock_file="${XDG_RUNTIME_DIR:-/tmp}/hypr-lid-displays.lock"
+    exec 9>"$lock_file"
+    flock -n 9 || exit 0
+
+    apply_layout
+
+    if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+        log "hyprland instance signature not set"
+        return 1
+    fi
+
+    socket="${XDG_RUNTIME_DIR}/hypr/${HYPRLAND_INSTANCE_SIGNATURE}/.socket2.sock"
+    if [[ ! -S "$socket" ]]; then
+        log "hyprland event socket not found"
+        return 1
+    fi
+
+    socat -U - "UNIX-CONNECT:$socket" 2>/dev/null | while IFS= read -r event; do
+        case "$event" in
+            monitoradded*|monitorremoved*)
+                sleep 1
+                apply_layout
+                ;;
+        esac
+    done
+}
+
+case "${1:-apply}" in
+    apply)
+        apply_layout
+        ;;
+    watch)
+        watch_events
+        ;;
+    *)
+        printf 'Usage: %s [apply|watch]\n' "$0" >&2
+        exit 2
+        ;;
+esac
