@@ -39,32 +39,6 @@ confirm_action() {
   [[ "$choice" == "Si" ]]
 }
 
-launch_terminal() {
-  local script_path=$1
-
-  if command -v kitty >/dev/null 2>&1; then
-    kitty --hold bash -lc "$script_path" &
-    return 0
-  fi
-
-  if command -v alacritty >/dev/null 2>&1; then
-    alacritty -e bash -lc "$script_path" &
-    return 0
-  fi
-
-  if command -v konsole >/dev/null 2>&1; then
-    konsole --hold -e bash -lc "$script_path" &
-    return 0
-  fi
-
-  if command -v xterm >/dev/null 2>&1; then
-    xterm -hold -e bash -lc "$script_path" &
-    return 0
-  fi
-
-  return 1
-}
-
 require_command wofi || exit 1
 
 choice=$(select_option "$MENU_TITLE" \
@@ -76,17 +50,15 @@ choice=$(select_option "$MENU_TITLE" \
 
 case "$choice" in
   "📦 Actualizar sistema")
-    require_command bash || exit 1
-
     if [[ ! -x "$UPDATE_SCRIPT" ]]; then
       notify_user "El script de actualizacion no existe o no es ejecutable."
       exit 1
     fi
 
-    if ! launch_terminal "$UPDATE_SCRIPT"; then
-      notify_user "No se encontro una terminal compatible para ejecutar la actualizacion."
-      exit 1
-    fi
+    # Ejecutar en segundo plano sin terminal; toda la salida va al log.
+    # setsid desacopla el proceso de la sesión de waybar.
+    setsid bash "$UPDATE_SCRIPT" </dev/null &>/dev/null &
+    disown
     ;;
   "🔒 Bloquear")
     require_command hyprlock || exit 1

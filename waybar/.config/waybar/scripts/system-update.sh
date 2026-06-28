@@ -125,21 +125,22 @@ _detect_aur_helper() {
 
 # ── Actualizaciones ───────────────────────────────────────────────────────────
 
-_update_pacman() {
-  _log "Actualizando paquetes oficiales (pacman)..."
-  sudo -A pacman -Syu --noconfirm >> "$LOG_FILE" 2>&1
-  _log "Pacman: OK."
-}
-
-_update_aur() {
+_update_packages() {
   local helper
   helper=$(_detect_aur_helper || true)
-  [[ -z "$helper" ]] && { _log "Sin helper AUR detectado. Saltando."; return 0; }
 
-  _log "Actualizando paquetes AUR ($helper)..."
-  # --sudoflags="-A" hace que el helper llame a "sudo -A", que usa SUDO_ASKPASS
-  "$helper" -Su --aur --noconfirm --sudoflags="-A" >> "$LOG_FILE" 2>&1
-  _log "AUR ($helper): OK."
+  if [[ -n "$helper" ]]; then
+    # El helper AUR gestiona pacman + AUR en conjunto: resuelve conflictos entre
+    # paquetes oficiales y AUR (ej. ntfs-3g vs woeusb-ng) reconstruyendo los
+    # paquetes AUR afectados antes de actualizar los oficiales.
+    _log "Actualizando sistema con $helper (pacman + AUR)..."
+    "$helper" -Syu --noconfirm --sudoflags="-A" >> "$LOG_FILE" 2>&1
+    _log "$helper: OK."
+  else
+    _log "Actualizando paquetes oficiales (pacman)..."
+    sudo -A pacman -Syu --noconfirm >> "$LOG_FILE" 2>&1
+    _log "Pacman: OK."
+  fi
 }
 
 _update_flatpak() {
@@ -166,8 +167,7 @@ main() {
   _setup_sudo
   _start_sudo_keepalive
 
-  _update_pacman
-  _update_aur
+  _update_packages
   _update_flatpak
 
   _log "=== Actualización completada correctamente ==="

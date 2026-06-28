@@ -133,7 +133,7 @@ _scan_staged_for_secrets() {
 
 _backup_dotfiles() {
   if [[ ! -d "$DOTFILES_REPO" ]] || \
-     ! git -C "$DOTFILES_REPO" rev-parse --is-inside-work-tree >> "$LOG_FILE" 2>&1; then
+     ! git -C "$DOTFILES_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     _log "WARN: Sin repositorio válido en $DOTFILES_REPO. Continuando sin respaldo."
     _notify low "Sin repo de dotfiles. Actualizando sin respaldo previo."
     return 0
@@ -141,11 +141,9 @@ _backup_dotfiles() {
 
   _log "=== Respaldo de dotfiles ==="
 
-  # Sincronizar con el remoto antes de commitear para evitar conflictos
-  _log "Sincronizando con $REMOTE_NAME/$MAIN_BRANCH..."
-  git -C "$DOTFILES_REPO" pull --rebase "$REMOTE_NAME" "$MAIN_BRANCH" >> "$LOG_FILE" 2>&1 \
-    || _log "WARN: pull rebase falló (posible falta de conexión). Continuando."
-
+  # Primero commitear cambios locales (el respaldo) con árbol limpio,
+  # luego integrar el remoto y hacer push. Esto evita que pull --rebase
+  # falle por cambios sin commitear.
   git -C "$DOTFILES_REPO" add . >> "$LOG_FILE" 2>&1
 
   # Abortar si hay archivos sensibles preparados para commit
@@ -162,6 +160,11 @@ _backup_dotfiles() {
     _log "Commit: $msg"
     git -C "$DOTFILES_REPO" commit -m "$msg" >> "$LOG_FILE" 2>&1
   fi
+
+  # Integrar cambios remotos (si los hay) antes del push
+  _log "Sincronizando con $REMOTE_NAME/$MAIN_BRANCH..."
+  git -C "$DOTFILES_REPO" pull --rebase "$REMOTE_NAME" "$MAIN_BRANCH" >> "$LOG_FILE" 2>&1 \
+    || _log "WARN: pull rebase falló (posible falta de conexión). Continuando."
 
   _log "Push a $REMOTE_NAME/$MAIN_BRANCH..."
   git -C "$DOTFILES_REPO" push "$REMOTE_NAME" "$MAIN_BRANCH" >> "$LOG_FILE" 2>&1
