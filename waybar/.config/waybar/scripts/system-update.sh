@@ -125,16 +125,61 @@ _detect_aur_helper() {
 
 # ── Actualizaciones ───────────────────────────────────────────────────────────
 
+_fix_aur_dep_conflicts() {
+  local helper="$1"
+  local log_mark="$2"
+
+  # Extraer paquetes AUR que causan el conflicto de dependencias.
+  # pacman imprime: "necesaria para el paquete PKG" o "required by PKG"
+  local -a broken=()
+  mapfile -t broken < <(
+    tail -n "+$((log_mark + 1))" "$LOG_FILE" \
+      | grep -Eo 'required by [a-zA-Z0-9_@+.-]+|el paquete [a-zA-Z0-9_@+.-]+' \
+      | grep -Eo '[a-zA-Z0-9_@+.-]+$' \
+      | sort -u
+  )
+
+  if [[ ${#broken[@]} -eq 0 ]]; then
+    _log "ERROR: Sin conflictos AUR identificables. Revisar el log manualmente."
+    return 1
+  fi
+
+  _log "Conflicto detectado. Eliminando temporalmente: ${broken[*]}"
+  # -Rdd: elimina sin verificar dependencias inversas (temporal)
+  sudo -A pacman -Rdd "${broken[@]}" --noconfirm >> "$LOG_FILE" 2>&1 || {
+    _log "ERROR: No se pudo eliminar ${broken[*]}."
+    return 1
+  }
+
+  _log "Reintentando actualización..."
+  if ! "$helper" -Syu --noconfirm --sudoflags="-A" >> "$LOG_FILE" 2>&1; then
+    _log "ERROR: Segunda pasada falló. Reinstalando lo eliminado para no dejar el sistema roto..."
+    "$helper" -S "${broken[@]}" --noconfirm --sudoflags="-A" >> "$LOG_FILE" 2>&1 || true
+    return 1
+  fi
+
+  # Reconstruir los paquetes AUR contra las versiones nuevas de sus dependencias
+  _log "Reconstruyendo paquetes AUR afectados: ${broken[*]}"
+  "$helper" -S "${broken[@]}" --noconfirm --sudoflags="-A" >> "$LOG_FILE" 2>&1 \
+    || _log "WARN: No se pudo reconstruir ${broken[*]} — instalar manualmente."
+}
+
 _update_packages() {
   local helper
   helper=$(_detect_aur_helper || true)
 
   if [[ -n "$helper" ]]; then
-    # El helper AUR gestiona pacman + AUR en conjunto: resuelve conflictos entre
-    # paquetes oficiales y AUR (ej. ntfs-3g vs woeusb-ng) reconstruyendo los
-    # paquetes AUR afectados antes de actualizar los oficiales.
     _log "Actualizando sistema con $helper (pacman + AUR)..."
-    "$helper" -Syu --noconfirm --sudoflags="-A" >> "$LOG_FILE" 2>&1
+
+    # Anotar posición en el log para aislar el output de este comando
+    local log_mark
+    log_mark=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
+
+    if ! "$helper" -Syu --noconfirm --sudoflags="-A" >> "$LOG_FILE" 2>&1; then
+      _log "Primera pasada falló. Buscando conflictos AUR para auto-resolver..."
+      _fix_aur_dep_conflicts "$helper" "$log_mark"
+    fi
+
     _log "$helper: OK."
   else
     _log "Actualizando paquetes oficiales (pacman)..."
