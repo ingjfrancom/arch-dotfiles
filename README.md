@@ -66,6 +66,51 @@ Opciones disponibles:
 - restaurar servicios
 - restauracion completa
 
+## Actualización del sistema desde Waybar
+
+El menú de apagado de Waybar incluye dos scripts en `waybar/.config/waybar/scripts/`:
+
+### `update-system-with-backup.sh` (entrada principal)
+
+Ejecuta el flujo completo sin interacción:
+
+1. Pide la contraseña de sudo **una sola vez** mediante un cuadro de diálogo (zenity).
+2. Valida las credenciales y arranca un proceso en segundo plano que renueva el timestamp de sudo cada 270 s para que no expire en actualizaciones largas.
+3. Hace `git pull --rebase` + `git add` + `git commit` + `git push` del repo de dotfiles como **respaldo previo** a la actualización. Si no hay cambios nuevos, omite el commit.
+4. Detecta y bloquea el commit si hay archivos sensibles en staging (`.env`, claves privadas, tokens de GitHub/AWS).
+5. Llama a `system-update.sh` pasando `SUDO_ASKPASS` y `_UPDATE_STANDALONE=false` para que no vuelva a pedir contraseña ni genere notificaciones de fallo duplicadas.
+6. Al finalizar, elimina los archivos temporales de contraseña y revoca el timestamp de sudo.
+
+### `system-update.sh` (también ejecutable de forma independiente)
+
+Actualiza pacman, AUR (yay/paru con `--sudoflags="-A"`) y Flatpak sin interacción. Si se llama de forma directa y no encuentra `SUDO_ASKPASS`, muestra su propio diálogo zenity.
+
+### Revertir una actualización fallida
+
+```sh
+cd ~/arch-dotfiles
+git log --oneline          # buscar el commit "auto-backup before system update ..."
+git checkout <hash> -- .   # restaurar ese estado de los dotfiles
+```
+
+### Logs
+
+Cada ejecución guarda un log en `~/.cache/system-updates/`:
+
+```
+~/.cache/system-updates/backup-YYYYMMDD-HHMMSS.log   # respaldo + git
+~/.cache/system-updates/update-YYYYMMDD-HHMMSS.log   # pacman/AUR/flatpak
+```
+
+### Dependencias
+
+| Herramienta | Paquete         | Uso                              |
+|-------------|-----------------|----------------------------------|
+| `zenity`    | `zenity`        | Diálogo de contraseña            |
+| `notify-send` | `libnotify`   | Notificaciones (dunst)           |
+| `yay`/`paru`| AUR             | Helper AUR (opcional)            |
+| `flatpak`   | `flatpak`       | Paquetes Flatpak (opcional)      |
+
 ## Exportaciones
 
 - `packages/pkglist.txt`: paquetes oficiales y explicitos de pacman

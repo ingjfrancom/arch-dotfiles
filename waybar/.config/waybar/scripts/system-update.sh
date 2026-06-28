@@ -1,161 +1,177 @@
 #!/usr/bin/env bash
+#
+# system-update.sh
+#
+# Actualiza el sistema completo (pacman, AUR, flatpak) sin interacción.
+#
+# Modos de uso:
+#   Standalone:    ./system-update.sh
+#   Desde wrapper: update-system-with-backup.sh exporta SUDO_ASKPASS y
+#                  _UPDATE_STANDALONE=false, por lo que no pide contraseña
+#                  de nuevo ni envía notificaciones de fallo propias.
+#
+# Contraseña:
+#   Se solicita una sola vez via zenity. Se guarda en un script temporal
+#   con permisos 700 apuntado por SUDO_ASKPASS. Se elimina al salir.
+#   yay/paru reciben --sudoflags="-A" para que usen el mismo mecanismo.
+#
+# Logs:           ${XDG_CACHE_HOME:-~/.cache}/system-updates/update-YYYYMMDD-HHMMSS.log
+# Notificaciones: notify-send (dunst)
+#
 
 set -Eeuo pipefail
 
-readonly NOTIFY_TITLE="Actualizacion del sistema"
+readonly NOTIFY_TITLE="Actualización del sistema"
+readonly LOG_DIR="${XDG_CACHE_HOME:-${HOME}/.cache}/system-updates"
+readonly LOG_FILE="${LOG_DIR}/update-$(date '+%Y%m%d-%H%M%S').log"
+readonly STANDALONE="${_UPDATE_STANDALONE:-true}"
 
-notify_user() {
-  local message=$1
+_created_askpass=false
+_askpass_file=""
+_pass_file=""
+_keepalive_pid=""
 
-  if command -v notify-send >/dev/null 2>&1; then
-    notify-send "$NOTIFY_TITLE" "$message"
+# ── Notificaciones ────────────────────────────────────────────────────────────
+
+_notify() {
+  command -v notify-send >/dev/null 2>&1 || return 0
+  notify-send -u "$1" "$NOTIFY_TITLE" "$2"
+}
+
+# ── Log ───────────────────────────────────────────────────────────────────────
+
+_log() {
+  printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
+}
+
+# ── Cleanup ───────────────────────────────────────────────────────────────────
+
+_cleanup() {
+  local code=$?
+  [[ -n "$_keepalive_pid" ]] && kill "$_keepalive_pid" 2>/dev/null || true
+  if [[ "$_created_askpass" == true ]]; then
+    rm -f "$_askpass_file" "$_pass_file"
+    sudo -k 2>/dev/null || true
+  fi
+  if (( code != 0 )) && [[ "$STANDALONE" == true ]]; then
+    _log "ERROR: Actualización terminó con código $code."
+    _notify critical "Actualización fallida. Log: $LOG_FILE"
   fi
 }
 
-pause_before_exit() {
-  printf '\nPresiona Enter para cerrar...'
-  read -r _
-}
+trap _cleanup EXIT
 
-print_section() {
-  local title=$1
-  printf '\n== %s ==\n' "$title"
-}
+# ── Autenticación ─────────────────────────────────────────────────────────────
 
-print_list() {
-  local title=$1
-  shift
-
-  print_section "$title"
-
-  if (($# == 0)); then
-    printf 'Nada pendiente.\n'
+_setup_sudo() {
+  if [[ -n "${SUDO_ASKPASS:-}" ]]; then
+    _log "Usando SUDO_ASKPASS heredado."
     return
   fi
 
-  printf '%s\n' "$@"
+  command -v zenity >/dev/null 2>&1 || {
+    _log "ERROR: zenity no instalado (sudo pacman -S zenity)."
+    _notify critical "zenity no encontrado. Actualización cancelada."
+    exit 1
+  }
+
+  local pass
+  pass=$(zenity --password \
+    --title="Actualización del sistema" \
+    --text="Contraseña de sudo requerida para actualizar el sistema:" \
+    2>/dev/null) || {
+    _log "ERROR: Sin contraseña."
+    _notify critical "Actualización cancelada: sin contraseña."
+    exit 1
+  }
+  [[ -z "$pass" ]] && {
+    _log "ERROR: Contraseña vacía."
+    _notify critical "Actualización cancelada: contraseña vacía."
+    exit 1
+  }
+
+  # Guardar contraseña en archivo temporal con permisos estrictos
+  _pass_file=$(mktemp /tmp/.sp.XXXXXX)
+  chmod 600 "$_pass_file"
+  printf '%s' "$pass" > "$_pass_file"
+
+  # Script askpass que lee la contraseña del archivo temporal
+  _askpass_file=$(mktemp /tmp/.sa.XXXXXX)
+  chmod 700 "$_askpass_file"
+  printf '#!/bin/sh\nexec cat "%s"\n' "$_pass_file" > "$_askpass_file"
+  export SUDO_ASKPASS="$_askpass_file"
+  _created_askpass=true
+
+  sudo -A -v >> "$LOG_FILE" 2>&1 || {
+    _log "ERROR: Contraseña incorrecta."
+    _notify critical "Contraseña incorrecta. Actualización cancelada."
+    exit 1
+  }
+  _log "Credenciales de sudo validadas."
 }
 
-detect_aur_helper() {
-  if command -v yay >/dev/null 2>&1; then
-    printf 'yay\n'
-    return
-  fi
-
-  if command -v paru >/dev/null 2>&1; then
-    printf 'paru\n'
-  fi
+# Refresca el timestamp de sudo cada 270 s para evitar expiración durante updates largos
+_start_sudo_keepalive() {
+  ( while true; do sleep 270; sudo -A -v >> "$LOG_FILE" 2>&1 || true; done ) &
+  _keepalive_pid=$!
 }
+
+# ── Detección de herramientas ─────────────────────────────────────────────────
+
+_detect_aur_helper() {
+  command -v yay  >/dev/null 2>&1 && { printf 'yay';  return; }
+  command -v paru >/dev/null 2>&1 && { printf 'paru'; return; }
+}
+
+# ── Actualizaciones ───────────────────────────────────────────────────────────
+
+_update_pacman() {
+  _log "Actualizando paquetes oficiales (pacman)..."
+  sudo -A pacman -Syu --noconfirm >> "$LOG_FILE" 2>&1
+  _log "Pacman: OK."
+}
+
+_update_aur() {
+  local helper
+  helper=$(_detect_aur_helper || true)
+  [[ -z "$helper" ]] && { _log "Sin helper AUR detectado. Saltando."; return 0; }
+
+  _log "Actualizando paquetes AUR ($helper)..."
+  # --sudoflags="-A" hace que el helper llame a "sudo -A", que usa SUDO_ASKPASS
+  "$helper" -Su --aur --noconfirm --sudoflags="-A" >> "$LOG_FILE" 2>&1
+  _log "AUR ($helper): OK."
+}
+
+_update_flatpak() {
+  command -v flatpak >/dev/null 2>&1 || { _log "Flatpak no instalado. Saltando."; return 0; }
+
+  _log "Actualizando Flatpak del sistema..."
+  flatpak update -y >> "$LOG_FILE" 2>&1 \
+    || _log "WARN: Flatpak sistema — sin actualizaciones o error menor."
+
+  _log "Actualizando Flatpak del usuario..."
+  flatpak update --user -y >> "$LOG_FILE" 2>&1 \
+    || _log "WARN: Flatpak usuario — sin actualizaciones o error menor."
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 main() {
-  local helper=""
-  local -a repo_updates=()
-  local -a aur_updates=()
-  local -a flatpak_system_updates=()
-  local -a flatpak_user_updates=()
-  local total_updates=0
+  mkdir -p "$LOG_DIR"
+  _log "=== Inicio de actualización del sistema ==="
 
-  if ! command -v pacman >/dev/null 2>&1; then
-    printf 'No se encontro pacman. Este script esta pensado para Arch Linux o derivados.\n' >&2
-    pause_before_exit
-    exit 1
-  fi
+  command -v pacman >/dev/null 2>&1 || { _log "ERROR: pacman no encontrado."; exit 1; }
+  command -v sudo   >/dev/null 2>&1 || { _log "ERROR: sudo no encontrado.";   exit 1; }
 
-  if ! command -v sudo >/dev/null 2>&1; then
-    printf 'No se encontro sudo. No puedo actualizar los paquetes del sistema sin ese comando.\n' >&2
-    pause_before_exit
-    exit 1
-  fi
+  _setup_sudo
+  _start_sudo_keepalive
 
-  helper=$(detect_aur_helper || true)
+  _update_pacman
+  _update_aur
+  _update_flatpak
 
-  clear
-  printf 'Actualizacion completa del sistema\n'
-  printf 'Fecha: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
-
-  if [[ -n "$helper" ]]; then
-    printf 'Helper AUR detectado: %s\n' "$helper"
-  else
-    printf 'Helper AUR detectado: ninguno\n'
-  fi
-
-  if command -v flatpak >/dev/null 2>&1; then
-    printf 'Flatpak: disponible\n'
-  else
-    printf 'Flatpak: no instalado\n'
-  fi
-
-  print_section "Sincronizando bases de paquetes"
-  printf 'Se solicitara tu contrasena para actualizar la base de datos de pacman.\n'
-  sudo pacman -Sy
-
-  mapfile -t repo_updates < <(pacman -Qu 2>/dev/null || true)
-
-  if [[ -n "$helper" ]]; then
-    mapfile -t aur_updates < <("$helper" -Qua 2>/dev/null || true)
-  fi
-
-  if command -v flatpak >/dev/null 2>&1; then
-    mapfile -t flatpak_system_updates < <(flatpak remote-ls --updates --columns=name,version,origin 2>/dev/null || true)
-    mapfile -t flatpak_user_updates < <(flatpak remote-ls --user --updates --columns=name,version,origin 2>/dev/null || true)
-  fi
-
-  print_list "Actualizaciones de repos oficiales" "${repo_updates[@]}"
-
-  if [[ -n "$helper" ]]; then
-    print_list "Actualizaciones AUR ($helper)" "${aur_updates[@]}"
-  fi
-
-  if command -v flatpak >/dev/null 2>&1; then
-    print_list "Actualizaciones Flatpak del sistema" "${flatpak_system_updates[@]}"
-    print_list "Actualizaciones Flatpak del usuario" "${flatpak_user_updates[@]}"
-  fi
-
-  total_updates=$((${#repo_updates[@]} + ${#aur_updates[@]} + ${#flatpak_system_updates[@]} + ${#flatpak_user_updates[@]}))
-
-  print_section "Resumen"
-  printf 'Total detectado: %d actualizaciones pendientes.\n' "$total_updates"
-
-  if ((total_updates == 0)); then
-    printf 'El sistema ya esta al dia.\n'
-    notify_user "No se encontraron actualizaciones pendientes."
-    pause_before_exit
-    exit 0
-  fi
-
-  printf '\nContinuar con la actualizacion completa? [s/N]: '
-  read -r confirm
-
-  if [[ ! "$confirm" =~ ^([sS]|[sS][iI])$ ]]; then
-    printf 'Actualizacion cancelada.\n'
-    notify_user "Actualizacion cancelada por el usuario."
-    pause_before_exit
-    exit 0
-  fi
-
-  print_section "Actualizando paquetes del sistema"
-  if [[ -n "$helper" ]]; then
-    "$helper" -Syu
-  else
-    sudo pacman -Syu
-  fi
-
-  if command -v flatpak >/dev/null 2>&1; then
-    if ((${#flatpak_system_updates[@]} > 0)); then
-      print_section "Actualizando Flatpak del sistema"
-      flatpak update -y
-    fi
-
-    if ((${#flatpak_user_updates[@]} > 0)); then
-      print_section "Actualizando Flatpak del usuario"
-      flatpak update --user -y
-    fi
-  fi
-
-  print_section "Finalizado"
-  printf 'La actualizacion termino sin errores.\n'
-  notify_user "Actualizacion completada correctamente."
-  pause_before_exit
+  _log "=== Actualización completada correctamente ==="
+  _notify normal "Sistema actualizado correctamente."
 }
 
 main "$@"
