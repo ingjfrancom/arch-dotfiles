@@ -125,6 +125,70 @@ _detect_aur_helper() {
 
 # ── Actualizaciones ───────────────────────────────────────────────────────────
 
+_log_slice_matches() {
+  local log_mark="$1"
+  local pattern="$2"
+
+  tail -n "+$((log_mark + 1))" "$LOG_FILE" 2>/dev/null | grep -Eqi "$pattern"
+}
+
+_is_download_failure() {
+  local log_mark="$1"
+
+  _log_slice_matches "$log_mark" \
+    'no se pudo obtener el archivo|no se pudieron descargar|failed retrieving file|failed to retrieve some files|Operation too slow|Connection timed out|Resolving timed out|Could not resolve host|Could not connect to|The requested URL returned error'
+}
+
+_is_dependency_failure() {
+  local log_mark="$1"
+
+  _log_slice_matches "$log_mark" \
+    'no se pudieron satisfacer las dependencias|rompe la dependencia|could not satisfy dependencies|breaks dependency|conflicting dependencies'
+}
+
+_refresh_mirrors() {
+  if ! command -v reflector >/dev/null 2>&1; then
+    _log "ERROR: reflector no está instalado; no se puede reparar la lista de mirrors."
+    return 1
+  fi
+
+  local mirror_tmp
+  mirror_tmp=$(mktemp /tmp/mirrorlist.XXXXXX)
+
+  _log "Regenerando mirrors HTTPS/IPv4 regionales (MX, US, CA)..."
+  if ! reflector \
+    --country MX,US,CA \
+    --protocol https \
+    --ipv4 \
+    --completion-percent 100 \
+    --age 24 \
+    --sort country \
+    --number 10 \
+    --connection-timeout 10 \
+    --download-timeout 30 \
+    --save "$mirror_tmp" >> "$LOG_FILE" 2>&1; then
+    _log "ERROR: reflector no pudo generar una lista regional."
+    rm -f "$mirror_tmp"
+    return 1
+  fi
+
+  if ! grep -q '^Server = https://' "$mirror_tmp"; then
+    _log "ERROR: reflector generó una lista vacía o no válida."
+    rm -f "$mirror_tmp"
+    return 1
+  fi
+
+  if ! sudo -A install -o root -g root -m 0644 \
+    "$mirror_tmp" /etc/pacman.d/mirrorlist >> "$LOG_FILE" 2>&1; then
+    _log "ERROR: No se pudo instalar la nueva lista de mirrors."
+    rm -f "$mirror_tmp"
+    return 1
+  fi
+
+  rm -f "$mirror_tmp"
+  _log "Lista regional instalada correctamente."
+}
+
 _fix_aur_dep_conflicts() {
   local helper="$1"
   local log_mark="$2"
@@ -176,8 +240,32 @@ _update_packages() {
     log_mark=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
 
     if ! "$helper" -Syu --noconfirm --sudoflags="-A" >> "$LOG_FILE" 2>&1; then
-      _log "Primera pasada falló. Buscando conflictos AUR para auto-resolver..."
-      _fix_aur_dep_conflicts "$helper" "$log_mark"
+      if _is_download_failure "$log_mark"; then
+        _log "Fallo de descarga detectado. Se renovarán los mirrors y se reintentará una vez."
+        _refresh_mirrors
+
+        local retry_mark
+        retry_mark=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
+        if ! "$helper" -Syu --noconfirm --sudoflags="-A" >> "$LOG_FILE" 2>&1; then
+          if _is_download_failure "$retry_mark"; then
+            _log "ERROR: La descarga volvió a fallar con mirrors nuevos. Revisar conexión o DNS."
+            return 1
+          fi
+          if _is_dependency_failure "$retry_mark"; then
+            _log "Conflicto de dependencias AUR detectado después del reintento."
+            _fix_aur_dep_conflicts "$helper" "$retry_mark"
+          else
+            _log "ERROR: El reintento falló por una causa no reconocida. No se eliminarán paquetes."
+            return 1
+          fi
+        fi
+      elif _is_dependency_failure "$log_mark"; then
+        _log "Conflicto de dependencias AUR detectado."
+        _fix_aur_dep_conflicts "$helper" "$log_mark"
+      else
+        _log "ERROR: La actualización falló por una causa no reconocida. No se eliminarán paquetes."
+        return 1
+      fi
     fi
 
     _log "$helper: OK."

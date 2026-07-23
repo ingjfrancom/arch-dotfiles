@@ -85,6 +85,8 @@ Ejecuta el flujo completo sin interacción:
 
 Actualiza pacman, AUR (yay/paru con `--sudoflags="-A"`) y Flatpak sin interacción. Si se llama de forma directa y no encuentra `SUDO_ASKPASS`, muestra su propio diálogo zenity.
 
+Si falla la descarga de paquetes, regenera una lista HTTPS/IPv4 con mirrors de México, Estados Unidos y Canadá y reintenta una sola vez. La reparación de conflictos AUR solo se ejecuta cuando el log contiene un error real de dependencias; otros fallos abortan sin eliminar paquetes.
+
 ### Revertir una actualización fallida
 
 ```sh
