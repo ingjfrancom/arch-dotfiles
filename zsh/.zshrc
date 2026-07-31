@@ -70,3 +70,6 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # Added by Antigravity CLI installer
 export PATH="/home/jfranco/.local/bin:$PATH"
+
+# OpenClaw Completion
+[ -f "/home/jfranco/.openclaw/completions/openclaw.zsh" ] && source "/home/jfranco/.openclaw/completions/openclaw.zsh"
